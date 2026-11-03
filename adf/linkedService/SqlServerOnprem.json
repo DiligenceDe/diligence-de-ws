@@ -1,0 +1,27 @@
+{
+	"name": "SqlServerOnprem",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"db_name": {
+				"type": "string",
+				"defaultValue": "AdventureWorks2025"
+			}
+		},
+		"annotations": [],
+		"type": "SqlServer",
+		"typeProperties": {
+			"server": "rs",
+			"database": "@{linkedService().db_name}",
+			"encrypt": "optional",
+			"trustServerCertificate": true,
+			"authenticationType": "Windows",
+			"userName": "RS\\shaik",
+			"encryptedCredential": "eyJDcmVkZW50aWFsSWQiOiIyMWQ3OThjZC1kZDlhLTQ3NmQtYWU0My03OTU4YzMwOGI2NjMiLCJWZXJzaW9uIjoiMi4wIiwiQ2xhc3NUeXBlIjoiTWljcm9zb2Z0LkRhdGFQcm94eS5Db3JlLkludGVyU2VydmljZURhdGFDb250cmFjdC5DcmVkZW50aWFsU1UwNkNZMTQifQ=="
+		},
+		"connectVia": {
+			"referenceName": "selfhost-ir-sqlservr",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
