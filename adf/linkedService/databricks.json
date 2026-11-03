@@ -1,0 +1,13 @@
+{
+	"name": "databricks",
+	"properties": {
+		"annotations": [],
+		"type": "AzureDatabricks",
+		"typeProperties": {
+			"domain": "https://adb-7405610662297201.1.azuredatabricks.net",
+			"authentication": "MSI",
+			"workspaceResourceId": "/subscriptions/46df5dab-d044-41af-8d1c-8f935daf33f0/resourceGroups/diligence-rg-test/providers/Microsoft.Databricks/workspaces/diligence-dbx-test",
+			"existingClusterId": "1103-112422-cx1rryxu"
+		}
+	}
+}
