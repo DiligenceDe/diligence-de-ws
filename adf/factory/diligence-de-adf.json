@@ -1,0 +1,15 @@
+{
+	"name": "diligence-de-adf",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true
+		}
+	},
+	"location": "indiasouthcentral",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "6ef76fb5-cd9b-4877-935b-f9cb5a7ce2da",
+		"tenantId": "4a10c5a0-a771-42a3-89a1-e1fc81c8ce67"
+	}
+}
