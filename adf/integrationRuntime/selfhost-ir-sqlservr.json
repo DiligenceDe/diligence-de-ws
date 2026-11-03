@@ -1,0 +1,9 @@
+{
+	"name": "selfhost-ir-sqlservr",
+	"properties": {
+		"type": "SelfHosted",
+		"typeProperties": {
+			"selfContainedInteractiveAuthoringEnabled": true
+		}
+	}
+}
