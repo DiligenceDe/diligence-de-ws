@@ -1,0 +1,10 @@
+{
+	"name": "adlsgen2",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobFS",
+		"typeProperties": {
+			"url": "https://diligencesaadlstest.dfs.core.windows.net"
+		}
+	}
+}
