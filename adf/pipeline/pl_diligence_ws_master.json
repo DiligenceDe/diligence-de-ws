@@ -17,6 +17,10 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "DECLARE @new_batch TABLE (batch_id BIGINT);\n\nINSERT INTO metadata.pipeline_run_log\n(\n    adf_run_id,\n    pipeline_name,\n    trigger_type,\n    trigger_name,\n    run_status,\n    start_time,\n    created_date\n)\nOUTPUT INSERTED.batch_id INTO @new_batch(batch_id)\nVALUES\n(\n    '@{pipeline().RunId}',\n    '@{pipeline().Pipeline}',\n    '@{pipeline().TriggerType}',\n    '@{pipeline().TriggerName}',\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);\n\nSELECT batch_id FROM @new_batch;",
+							"type": "Expression"
+						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -25,8 +29,38 @@
 						"type": "DatasetReference"
 					}
 				}
+			},
+			{
+				"name": "set_batch_id",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "lookup_create_batch_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "batch_id",
+					"value": {
+						"value": "@string(activity('lookup_create_batch_id').output.firstRow.batch_id)",
+						"type": "Expression"
+					}
+				}
 			}
 		],
+		"variables": {
+			"batch_id": {
+				"type": "String",
+				"defaultValue": "1"
+			}
+		},
 		"annotations": []
 	}
 }
