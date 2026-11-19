@@ -53,8 +53,62 @@
 						"type": "Expression"
 					}
 				}
+			},
+			{
+				"name": "lookup_get_source_objects",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "set_batch_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
+					},
+					"firstRowOnly": false
+				}
 			}
 		],
+		"parameters": {
+			"p_source_id": {
+				"type": "int",
+				"defaultValue": 1
+			},
+			"p_run_mode": {
+				"type": "string",
+				"defaultValue": "INITIAL"
+			},
+			"p_previous_batch_id": {
+				"type": "int",
+				"defaultValue": 1001
+			},
+			"p_rerun_layer": {
+				"type": "string",
+				"defaultValue": "BRONZE"
+			}
+		},
 		"variables": {
 			"batch_id": {
 				"type": "String",
