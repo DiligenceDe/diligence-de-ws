@@ -47,7 +47,7 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"variableName": "batch_id",
+					"variableName": "v_batch_id",
 					"value": {
 						"value": "@string(activity('lookup_create_batch_id').output.firstRow.batch_id)",
 						"type": "Expression"
@@ -76,6 +76,10 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@concat(\n'SELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nWHERE sc.source_id = ',\nstring(pipeline().parameters.p_source_id),\n' AND sc.is_active = 1\n  AND oc.is_active = 1\nORDER BY oc.execution_order'\n)",
+							"type": "Expression"
+						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -110,9 +114,18 @@
 			}
 		},
 		"variables": {
-			"batch_id": {
+			"v_batch_id": {
 				"type": "String",
 				"defaultValue": "1"
+			},
+			"v_bronze_status": {
+				"type": "String"
+			},
+			"v_silver_status": {
+				"type": "String"
+			},
+			"v_gold_status": {
+				"type": "String"
 			}
 		},
 		"annotations": []
