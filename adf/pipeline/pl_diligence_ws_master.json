@@ -355,6 +355,25 @@
 						"type": "Expression"
 					}
 				}
+			},
+			{
+				"name": "IF_Bronze_Success",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "SET_Bronze_Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('v_bronze_status'), 'SUCCESS')",
+						"type": "Expression"
+					}
+				}
 			}
 		],
 		"parameters": {
