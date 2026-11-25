@@ -121,7 +121,15 @@
 												"p_source_table": "@item().source_table",
 												"p_target_table": "@item().target_table",
 												"p_primary_key_columns": "@item().primary_key_columns",
-												"p_load_type": "@item().load_type"
+												"p_load_type": "@item().load_type",
+												"p_bronze_path": {
+													"value": "@concat(\n    'abfss://<container>@<storage-account>.dfs.core.windows.net/bronze/',\n    item().source_schema,\n    '/',\n    item().target_table,\n    '/batch_id=',\n    variables('v_batch_id')\n)",
+													"type": "Expression"
+												},
+												"p_silver_path": {
+													"value": "@concat(\n    'abfss://<container>@<storage-account>.dfs.core.windows.net/silver/',\n    item().source_schema,\n    '/',\n    item().target_table\n)",
+													"type": "Expression"
+												}
 											}
 										},
 										"linkedServiceName": {
