@@ -372,7 +372,42 @@
 					"expression": {
 						"value": "@equals(variables('v_bronze_status'), 'SUCCESS')",
 						"type": "Expression"
-					}
+					},
+					"ifTrueActivities": [
+						{
+							"name": "LKP_Get_Silver_Objects",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.primary_key_columns,\n    oc.load_type,\n    oc.watermark_column,\n    oc.execution_order\nFROM metadata.object_config oc\nWHERE oc.source_id = @{pipeline().parameters.p_source_id}\n  AND oc.is_active = 1\n  AND oc.bronze_enabled = 1\n  AND oc.silver_enabled = 1\nORDER BY oc.execution_order;",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "ds_sql_db",
+									"type": "DatasetReference",
+									"parameters": {
+										"table_schema": "metadata",
+										"table_name": "object_config"
+									}
+								},
+								"firstRowOnly": false
+							}
+						}
+					]
 				}
 			}
 		],
