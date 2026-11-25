@@ -1,0 +1,40 @@
+{
+	"name": "pl_gold",
+	"properties": {
+		"activities": [
+			{
+				"name": "IF_Silver_Success",
+				"type": "IfCondition",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('v_silver_status'), 'SUCCESS')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "SQL_Start_Gold_Log",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": []
+						}
+					]
+				}
+			}
+		],
+		"variables": {
+			"v_silver": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}
