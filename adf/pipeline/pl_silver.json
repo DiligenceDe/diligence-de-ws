@@ -136,14 +136,163 @@
 											"referenceName": "databricks",
 											"type": "LinkedServiceReference"
 										}
+									},
+									{
+										"name": "SQL_Silver_Success",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "NB_Silver_Generic",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'SILVER'\n  AND run_status = 'RUNNING';",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "ds_sql_db",
+												"type": "DatasetReference",
+												"parameters": {
+													"table_schema": "metadata",
+													"table_name": "object_config"
+												}
+											},
+											"firstRowOnly": true
+										}
+									},
+									{
+										"name": "SQL_Silver_Failure",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "NB_Silver_Generic",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Silver notebook execution failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'SILVER'\n  AND run_status = 'RUNNING';",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "ds_sql_db",
+												"type": "DatasetReference",
+												"parameters": {
+													"table_schema": "metadata",
+													"table_name": "object_config"
+												}
+											},
+											"firstRowOnly": false
+										}
 									}
 								]
 							}
 						}
 					]
 				}
+			},
+			{
+				"name": "LKP_Check_Silver_Status",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "ForEach1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n              AND layer_name = 'SILVER'\n              AND run_status = 'FAILED'\n        )\n        THEN 'FAILED'\n\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n              AND layer_name = 'SILVER'\n              AND run_status = 'RUNNING'\n        )\n        THEN 'RUNNING'\n\n        ELSE 'SUCCESS'\n    END AS silver_status;",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "v_silver_status",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "LKP_Check_Silver_Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_silver",
+					"value": {
+						"value": "@activity('LKP_Check_Silver_Status').output.firstRow.silver_status",
+						"type": "Expression"
+					}
+				}
 			}
 		],
+		"variables": {
+			"v_silver": {
+				"type": "String"
+			}
+		},
 		"annotations": []
 	}
 }
