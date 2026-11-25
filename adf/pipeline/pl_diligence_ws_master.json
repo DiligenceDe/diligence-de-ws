@@ -150,7 +150,25 @@
 												"queryTimeout": "02:00:00",
 												"partitionOption": "None"
 											},
-											"enableStaging": false
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings",
+													"copyBehavior": "FlattenHierarchy"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
 										},
 										"inputs": [
 											{
@@ -159,6 +177,17 @@
 												"parameters": {
 													"table_schema": "metadata",
 													"table_name": "object_config"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "ds_adls",
+												"type": "DatasetReference",
+												"parameters": {
+													"file_name": "test",
+													"directory": "test",
+													"file_system": "test"
 												}
 											}
 										]
