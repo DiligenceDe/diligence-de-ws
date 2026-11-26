@@ -310,7 +310,7 @@
 					{
 						"activity": "foreach_bronze_objects",
 						"dependencyConditions": [
-							"Succeeded"
+							"Completed"
 						]
 					}
 				],
@@ -601,7 +601,8 @@
 					{
 						"activity": "SET_Gold_Status",
 						"dependencyConditions": [
-							"Succeeded"
+							"Succeeded",
+							"Failed"
 						]
 					}
 				],
