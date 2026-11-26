@@ -1,0 +1,509 @@
+{
+	"name": "pl_master_copy1",
+	"properties": {
+		"activities": [
+			{
+				"name": "lookup_create_batch_id",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "DECLARE @new_batch TABLE (batch_id BIGINT);\n\nINSERT INTO metadata.pipeline_run_log\n(\n    adf_run_id,\n    pipeline_name,\n    trigger_type,\n    trigger_name,\n    run_status,\n    start_time,\n    created_date\n)\nOUTPUT INSERTED.batch_id INTO @new_batch(batch_id)\nVALUES\n(\n    '@{pipeline().RunId}',\n    '@{pipeline().Pipeline}',\n    '@{pipeline().TriggerType}',\n    '@{pipeline().TriggerName}',\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);\n\nSELECT batch_id FROM @new_batch;",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "set_batch_id",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "lookup_create_batch_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_batch_id",
+					"value": {
+						"value": "@string(activity('lookup_create_batch_id').output.firstRow.batch_id)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "lookup_get_source_objects",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "set_batch_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@concat(\n'SELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nWHERE sc.source_id = ',\nstring(pipeline().parameters.p_source_id),\n' AND sc.is_active = 1\n  AND oc.is_active = 1\nORDER BY oc.execution_order'\n)",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "foreach_bronze_objects",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lookup_get_source_objects",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lookup_get_source_objects').output.value\n",
+						"type": "Expression"
+					},
+					"isSequential": true,
+					"activities": [
+						{
+							"name": "If Condition1",
+							"type": "IfCondition",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().bronze_enabled, true)",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "copy_sql_to_bronze",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "sql_start_bronze_log",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": "Select 1 as test_id",
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings",
+													"copyBehavior": "FlattenHierarchy"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "ds_sql_db",
+												"type": "DatasetReference",
+												"parameters": {
+													"table_schema": "metadata",
+													"table_name": "object_config"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "ds_adls",
+												"type": "DatasetReference",
+												"parameters": {
+													"file_name": "test",
+													"directory": "test",
+													"file_system": "test"
+												}
+											}
+										]
+									},
+									{
+										"name": "sql_start_bronze_log",
+										"type": "Script",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"linkedServiceName": {
+											"referenceName": "ls_sql_db",
+											"type": "LinkedServiceReference"
+										},
+										"typeProperties": {
+											"scripts": [
+												{
+													"type": "Query",
+													"text": {
+														"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'BRONZE',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+														"type": "Expression"
+													}
+												}
+											],
+											"scriptBlockExecutionTimeout": "02:00:00"
+										}
+									},
+									{
+										"name": "SQL_Bronze_Success",
+										"type": "Script",
+										"dependsOn": [
+											{
+												"activity": "copy_sql_to_bronze",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"linkedServiceName": {
+											"referenceName": "ls_sql_db",
+											"type": "LinkedServiceReference"
+										},
+										"typeProperties": {
+											"scripts": [
+												{
+													"type": "Query",
+													"text": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';"
+												}
+											],
+											"scriptBlockExecutionTimeout": "02:00:00"
+										}
+									},
+									{
+										"name": "SQL_Bronze_Failure",
+										"type": "Script",
+										"dependsOn": [
+											{
+												"activity": "copy_sql_to_bronze",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"linkedServiceName": {
+											"referenceName": "ls_sql_db",
+											"type": "LinkedServiceReference"
+										},
+										"typeProperties": {
+											"scripts": [
+												{
+													"type": "Query",
+													"text": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze Copy Activity failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';"
+												}
+											],
+											"scriptBlockExecutionTimeout": "02:00:00"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "LKP_Check_Bronze_Status",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "foreach_bronze_objects",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n              AND layer_name = 'BRONZE'\n              AND run_status = 'FAILED'\n        )\n        THEN 'FAILED'\n\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n              AND layer_name = 'BRONZE'\n              AND run_status = 'RUNNING'\n        )\n        THEN 'RUNNING'\n\n        ELSE 'SUCCESS'\n    END AS bronze_status;",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
+					}
+				}
+			},
+			{
+				"name": "SET_Bronze_Status",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "LKP_Check_Bronze_Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_bronze_status",
+					"value": {
+						"value": "@activity('LKP_Check_Bronze_Status').output.firstRow.bronze_status",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "IF_Bronze_Success",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "SET_Bronze_Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('v_bronze_status'), 'SUCCESS')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "pl_silver",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_silver",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "IF_Silver_Success",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "IF_Bronze_Success",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('v_silver_status'), 'SUCCESS')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "pl_gold",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_gold",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "final_status_log",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "IF_Silver_Success",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "UPDATE metadata.pipeline_run_log\nSET\n    bronze_status = '@{variables('v_bronze_status')}',\n    silver_status = '@{variables('v_silver_status')}',\n    gold_status = '@{variables('v_gold_status')}',\n\n    run_status =\n        CASE\n            WHEN '@{variables('v_bronze_status')}' = 'FAILED'\n              OR '@{variables('v_silver_status')}' = 'FAILED'\n              OR '@{variables('v_gold_status')}' = 'FAILED'\n            THEN 'FAILED'\n\n            WHEN '@{variables('v_bronze_status')}' = 'RUNNING'\n              OR '@{variables('v_silver_status')}' = 'RUNNING'\n              OR '@{variables('v_gold_status')}' = 'RUNNING'\n            THEN 'RUNNING'\n\n            ELSE 'SUCCESS'\n        END,\n\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT);",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"p_source_id": {
+				"type": "int",
+				"defaultValue": 1
+			},
+			"p_run_mode": {
+				"type": "string",
+				"defaultValue": "INITIAL"
+			},
+			"p_previous_batch_id": {
+				"type": "int",
+				"defaultValue": 1001
+			},
+			"p_rerun_layer": {
+				"type": "string",
+				"defaultValue": "BRONZE"
+			}
+		},
+		"variables": {
+			"v_batch_id": {
+				"type": "String",
+				"defaultValue": "1"
+			},
+			"v_bronze_status": {
+				"type": "String"
+			},
+			"v_silver_status": {
+				"type": "String"
+			},
+			"v_gold_status": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}
