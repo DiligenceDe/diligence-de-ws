@@ -288,6 +288,17 @@
 				}
 			}
 		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "string"
+			},
+			"p_source_id": {
+				"type": "string"
+			},
+			"p_run_mode": {
+				"type": "string"
+			}
+		},
 		"variables": {
 			"v_silver": {
 				"type": "String"
