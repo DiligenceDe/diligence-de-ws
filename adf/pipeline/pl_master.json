@@ -7,9 +7,9 @@
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"timeout": "0.1:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 20,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -18,7 +18,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "DECLARE @new_batch TABLE (batch_id BIGINT);\n\nINSERT INTO metadata.pipeline_run_log\n(\n    adf_run_id,\n    pipeline_name,\n    trigger_type,\n    trigger_name,\n    run_status,\n    start_time,\n    created_date\n)\nOUTPUT INSERTED.batch_id INTO @new_batch(batch_id)\nVALUES\n(\n    '@{pipeline().RunId}',\n    '@{pipeline().Pipeline}',\n    '@{pipeline().TriggerType}',\n    '@{pipeline().TriggerName}',\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);\n\nSELECT batch_id FROM @new_batch;",
+							"value": "DECLARE @batch_id BIGINT;\n\nIF '@{pipeline().parameters.p_run_mode}' = 'INITIAL'\nBEGIN\n    DECLARE @new_batch TABLE (batch_id BIGINT);\n\n    INSERT INTO metadata.pipeline_run_log\n    (\n        adf_run_id,\n        pipeline_name,\n        trigger_type,\n        trigger_name,\n        run_status,\n        start_time,\n        created_date\n    )\n    OUTPUT INSERTED.batch_id INTO @new_batch(batch_id)\n    VALUES\n    (\n        '@{pipeline().RunId}',\n        '@{pipeline().Pipeline}',\n        '@{pipeline().TriggerType}',\n        '@{pipeline().TriggerName}',\n        'RUNNING',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME()\n    );\n\n    SELECT @batch_id = batch_id\n    FROM @new_batch;\nEND\nELSE IF '@{pipeline().parameters.p_run_mode}' = 'RERUN'\nBEGIN\n    SET @batch_id =\n        CAST('@{pipeline().parameters.p_previous_batch_id}' AS BIGINT);\n\n    IF NOT EXISTS\n    (\n        SELECT 1\n        FROM metadata.pipeline_run_log\n        WHERE batch_id = @batch_id\n    )\n    BEGIN\n        THROW 50001, 'Batch ID does not exist.', 1;\n    END;\n\n    UPDATE metadata.pipeline_run_log\n    SET\n        run_status = 'RUNNING',\n        end_time = NULL,\n        modified_date = SYSUTCDATETIME()\n    WHERE batch_id = @batch_id;\nEND\nELSE\nBEGIN\n    THROW 50002, 'Invalid p_run_mode.', 1;\nEND;\n\nSELECT @batch_id AS batch_id;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -26,7 +26,11 @@
 					},
 					"dataset": {
 						"referenceName": "ds_sql_db",
-						"type": "DatasetReference"
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
 					}
 				}
 			},
@@ -77,7 +81,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "@concat(\n'SELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nWHERE sc.source_id = ',\nstring(pipeline().parameters.p_source_id),\n' AND sc.is_active = 1\n  AND oc.is_active = 1\nORDER BY oc.execution_order'\n)",
+							"value": "SELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nWHERE sc.source_id = 1\n  AND sc.is_active = 1\n  AND oc.is_active = 1\n  AND oc.bronze_enabled = 1\n  AND\n  (\n      '@{pipeline().parameters.p_run_mode}' = 'INITIAL'\n\n      OR\n\n      (\n          '@{pipeline().parameters.p_run_mode}' = 'RERUN'\n          AND NOT EXISTS\n          (\n              SELECT 1\n              FROM metadata.table_run_log tr\n              WHERE tr.batch_id =\n                    CAST('@{variables('v_batch_id')}' AS BIGINT)\n                AND tr.object_id = oc.object_id\n                AND tr.layer_name = 'BRONZE'\n                AND tr.run_status = 'SUCCESS'\n          )\n      )\n  )\nORDER BY oc.execution_order;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -213,7 +217,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'BRONZE',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+														"value": "DECLARE @next_attempt INT;\n\nSELECT\n    @next_attempt = ISNULL(MAX(attempt_number), 0) + 1\nFROM metadata.table_run_log\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE';\n\nINSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'BRONZE',\n    @next_attempt,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
 														"type": "Expression"
 													}
 												}
