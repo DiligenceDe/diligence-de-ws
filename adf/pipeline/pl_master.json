@@ -320,7 +320,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n              AND layer_name = 'BRONZE'\n              AND run_status = 'FAILED'\n        )\n        THEN 'FAILED'\n\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n              AND layer_name = 'BRONZE'\n              AND run_status = 'RUNNING'\n        )\n        THEN 'RUNNING'\n\n        ELSE 'SUCCESS'\n    END AS bronze_status;",
+							"value": "WITH LatestAttempt AS\n(\n    SELECT\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND layer_name = 'BRONZE'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM LatestAttempt\n            WHERE rn = 1\n              AND run_status IN ('FAILED', 'RUNNING')\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS bronze_status;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
