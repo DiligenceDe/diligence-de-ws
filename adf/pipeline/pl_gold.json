@@ -85,7 +85,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND layer_name = 'GOLD'\n  AND run_status = 'RUNNING';",
+							"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n  AND layer_name = 'GOLD'\n  AND run_status = 'RUNNING';",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -125,7 +125,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook execution failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND layer_name = 'GOLD'\n  AND run_status = 'RUNNING';",
+							"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook execution failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n  AND layer_name = 'GOLD'\n  AND run_status = 'RUNNING';",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
