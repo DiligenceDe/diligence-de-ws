@@ -442,7 +442,21 @@
 									"referenceName": "pl_gold",
 									"type": "PipelineReference"
 								},
-								"waitOnCompletion": true
+								"waitOnCompletion": true,
+								"parameters": {
+									"p_batch_id": {
+										"value": "@int(variables('v_batch_id'))",
+										"type": "Expression"
+									},
+									"p_source_id": {
+										"value": "@pipeline().parameters.p_source_id",
+										"type": "Expression"
+									},
+									"p_run_mode": {
+										"value": "@pipeline().parameters.p_run_mode",
+										"type": "Expression"
+									}
+								}
 							}
 						}
 					]
