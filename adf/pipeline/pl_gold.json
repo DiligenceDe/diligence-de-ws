@@ -18,7 +18,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'GOLD',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+							"value": "WITH LatestSilver AS\n(\n    SELECT\n        batch_id,\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY batch_id, object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n      AND layer_name = 'SILVER'\n),\nLatestGold AS\n(\n    SELECT\n        batch_id,\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY batch_id, object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n      AND layer_name = 'GOLD'\n)\nSELECT\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.execution_order\nFROM metadata.object_config oc\nINNER JOIN LatestSilver s\n    ON oc.object_id = s.object_id\n   AND s.rn = 1\n   AND s.run_status = 'SUCCESS'\nLEFT JOIN LatestGold g\n    ON oc.object_id = g.object_id\n   AND g.rn = 1\nWHERE oc.is_active = 1\n  AND oc.gold_enabled = 1\n  AND g.object_id IS NULL\nORDER BY oc.execution_order;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -143,6 +143,17 @@
 				}
 			}
 		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "string"
+			},
+			"p_source_id": {
+				"type": "string"
+			},
+			"p_run_mode": {
+				"type": "string"
+			}
+		},
 		"annotations": []
 	}
 }
