@@ -81,7 +81,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nWHERE sc.source_id = 1\n  AND sc.is_active = 1\n  AND oc.is_active = 1\n  AND oc.bronze_enabled = 1\n  AND\n  (\n      '@{pipeline().parameters.p_run_mode}' = 'INITIAL'\n\n      OR\n\n      (\n          '@{pipeline().parameters.p_run_mode}' = 'RERUN'\n          AND NOT EXISTS\n          (\n              SELECT 1\n              FROM metadata.table_run_log tr\n              WHERE tr.batch_id =\n                    CAST('@{variables('v_batch_id')}' AS BIGINT)\n                AND tr.object_id = oc.object_id\n                AND tr.layer_name = 'BRONZE'\n                AND tr.run_status = 'SUCCESS'\n          )\n      )\n  )\nORDER BY oc.execution_order;",
+							"value": "\nWITH LatestBronzeAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'BRONZE'\n)\nSELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nLEFT JOIN LatestBronzeAttempt la\n    ON la.object_id = oc.object_id\n   AND la.rn = 1\nWHERE sc.source_id = @{pipeline().parameters.p_source_id}\n  AND sc.is_active = 1\n  AND oc.is_active = 1\n  AND oc.bronze_enabled = 1\n  AND\n  (\n      '@{pipeline().parameters.p_run_mode}' = 'INITIAL'\n      OR\n      (\n          '@{pipeline().parameters.p_run_mode}' = 'RERUN'\n          AND ISNULL(la.run_status, 'NOT_STARTED') <> 'SUCCESS'\n      )\n  )\nORDER BY oc.execution_order;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -252,7 +252,10 @@
 											"scripts": [
 												{
 													"type": "Query",
-													"text": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';"
+													"text": {
+														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL,\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';\n",
+														"type": "Expression"
+													}
 												}
 											],
 											"scriptBlockExecutionTimeout": "02:00:00"
@@ -285,7 +288,10 @@
 											"scripts": [
 												{
 													"type": "Query",
-													"text": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze Copy Activity failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';"
+													"text": {
+														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze Copy Activity failed. Check ADF activity output.',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';\n",
+														"type": "Expression"
+													}
 												}
 											],
 											"scriptBlockExecutionTimeout": "02:00:00"
@@ -320,7 +326,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "WITH LatestAttempt AS\n(\n    SELECT\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND layer_name = 'BRONZE'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM LatestAttempt\n            WHERE rn = 1\n              AND run_status IN ('FAILED', 'RUNNING')\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS bronze_status;",
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.bronze_enabled = 1\n),\nLatestAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'BRONZE'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestAttempt la\n                ON la.object_id = e.object_id\n               AND la.rn = 1\n            WHERE la.object_id IS NULL\n               OR la.run_status <> 'SUCCESS'\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS bronze_status;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -485,7 +491,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "UPDATE metadata.pipeline_run_log\nSET\n    bronze_status = '@{variables('v_bronze_status')}',\n    silver_status = '@{variables('v_silver_status')}',\n    gold_status = '@{variables('v_gold_status')}',\n\n    run_status =\n        CASE\n            WHEN '@{variables('v_bronze_status')}' = 'FAILED'\n              OR '@{variables('v_silver_status')}' = 'FAILED'\n              OR '@{variables('v_gold_status')}' = 'FAILED'\n            THEN 'FAILED'\n\n            WHEN '@{variables('v_bronze_status')}' = 'RUNNING'\n              OR '@{variables('v_silver_status')}' = 'RUNNING'\n              OR '@{variables('v_gold_status')}' = 'RUNNING'\n            THEN 'RUNNING'\n\n            ELSE 'SUCCESS'\n        END,\n\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT);",
+							"value": "\nUPDATE metadata.pipeline_run_log\nSET\n    bronze_status = '@{variables('v_bronze_status')}',\n    silver_status = '@{variables('v_silver_status')}',\n    gold_status = '@{variables('v_gold_status')}',\n\n    run_status =\n        CASE\n            WHEN '@{variables('v_bronze_status')}' = 'FAILED'\n              OR '@{variables('v_silver_status')}' = 'FAILED'\n              OR '@{variables('v_gold_status')}' = 'FAILED'\n            THEN 'FAILED'\n\n            WHEN '@{variables('v_bronze_status')}' = 'RUNNING'\n              OR '@{variables('v_silver_status')}' = 'RUNNING'\n              OR '@{variables('v_gold_status')}' = 'RUNNING'\n            THEN 'RUNNING'\n\n            ELSE 'SUCCESS'\n        END,\n\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\n\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT);\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -525,7 +531,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "WITH LatestAttempt AS\n(\n    SELECT\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND layer_name = 'SILVER'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM LatestAttempt\n            WHERE rn = 1\n              AND run_status IN ('FAILED', 'RUNNING')\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS silver_status;",
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.silver_enabled = 1\n      AND EXISTS\n      (\n          SELECT 1\n          FROM metadata.table_run_log br\n          WHERE br.batch_id =\n                CAST('@{variables('v_batch_id')}' AS BIGINT)\n            AND br.object_id = oc.object_id\n            AND br.layer_name = 'BRONZE'\n            AND br.run_status = 'SUCCESS'\n            AND br.attempt_number =\n            (\n                SELECT MAX(br2.attempt_number)\n                FROM metadata.table_run_log br2\n                WHERE br2.batch_id = br.batch_id\n                  AND br2.object_id = br.object_id\n                  AND br2.layer_name = 'BRONZE'\n            )\n      )\n),\nLatestSilverAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'SILVER'\n)\nSELECT\n    CASE\n        WHEN '@{variables('v_bronze_status')}' <> 'SUCCESS'\n            THEN 'FAILED'\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestSilverAttempt sa\n                ON sa.object_id = e.object_id\n               AND sa.rn = 1\n            WHERE sa.object_id IS NULL\n               OR sa.run_status <> 'SUCCESS'\n        )\n            THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS silver_status;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -560,7 +566,7 @@
 				"typeProperties": {
 					"variableName": "v_silver_status",
 					"value": {
-						"value": "@activity('LKP_Check_Silver_Status').outputactivity",
+						"value": "@activity('LKP_Check_Silver_Status').output.firstRow.silver_status",
 						"type": "Expression"
 					}
 				}
@@ -588,7 +594,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "WITH LatestAttempt AS\n(\n    SELECT\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND layer_name = 'GOLD'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM LatestAttempt\n            WHERE rn = 1\n              AND run_status IN ('FAILED', 'RUNNING')\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS gold_status;",
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.gold_enabled = 1\n      AND EXISTS\n      (\n          SELECT 1\n          FROM metadata.table_run_log sr\n          WHERE sr.batch_id =\n                CAST('@{variables('v_batch_id')}' AS BIGINT)\n            AND sr.object_id = oc.object_id\n            AND sr.layer_name = 'SILVER'\n            AND sr.run_status = 'SUCCESS'\n            AND sr.attempt_number =\n            (\n                SELECT MAX(sr2.attempt_number)\n                FROM metadata.table_run_log sr2\n                WHERE sr2.batch_id = sr.batch_id\n                  AND sr2.object_id = sr.object_id\n                  AND sr2.layer_name = 'SILVER'\n            )\n      )\n),\nLatestGoldAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'GOLD'\n)\nSELECT\n    CASE\n        WHEN '@{variables('v_silver_status')}' <> 'SUCCESS'\n            THEN 'FAILED'\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestGoldAttempt ga\n                ON ga.object_id = e.object_id\n               AND ga.rn = 1\n            WHERE ga.object_id IS NULL\n               OR ga.run_status <> 'SUCCESS'\n        )\n            THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS gold_status;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -623,7 +629,7 @@
 				"typeProperties": {
 					"variableName": "v_gold_status",
 					"value": {
-						"value": "@activity('LKP_Check_Gold_Status').outputactivity",
+						"value": "@activity('LKP_Check_Gold_Status').output.firstRow.silver_status",
 						"type": "Expression"
 					}
 				}
