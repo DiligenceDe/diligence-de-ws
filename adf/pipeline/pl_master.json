@@ -469,46 +469,6 @@
 				}
 			},
 			{
-				"name": "final_status_log",
-				"type": "Lookup",
-				"dependsOn": [
-					{
-						"activity": "SET_Gold_Status",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"source": {
-						"type": "AzureSqlSource",
-						"sqlReaderQuery": {
-							"value": "\nUPDATE metadata.pipeline_run_log\nSET\n    bronze_status = '@{variables('v_bronze_status')}',\n    silver_status = '@{variables('v_silver_status')}',\n    gold_status = '@{variables('v_gold_status')}',\n\n    run_status =\n        CASE\n            WHEN '@{variables('v_bronze_status')}' = 'FAILED'\n              OR '@{variables('v_silver_status')}' = 'FAILED'\n              OR '@{variables('v_gold_status')}' = 'FAILED'\n            THEN 'FAILED'\n\n            WHEN '@{variables('v_bronze_status')}' = 'RUNNING'\n              OR '@{variables('v_silver_status')}' = 'RUNNING'\n              OR '@{variables('v_gold_status')}' = 'RUNNING'\n            THEN 'RUNNING'\n\n            ELSE 'SUCCESS'\n        END,\n\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\n\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT);\n",
-							"type": "Expression"
-						},
-						"queryTimeout": "02:00:00",
-						"partitionOption": "None"
-					},
-					"dataset": {
-						"referenceName": "ds_sql_db",
-						"type": "DatasetReference",
-						"parameters": {
-							"table_schema": "metadata",
-							"table_name": "object_config"
-						}
-					},
-					"firstRowOnly": false
-				}
-			},
-			{
 				"name": "LKP_Check_Silver_Status",
 				"type": "Lookup",
 				"dependsOn": [
@@ -629,9 +589,45 @@
 				"typeProperties": {
 					"variableName": "v_gold_status",
 					"value": {
-						"value": "@activity('LKP_Check_Gold_Status').output.firstRow.silver_status",
+						"value": "@activity('LKP_Check_Gold_Status').output.firstRow.gold_status",
 						"type": "Expression"
 					}
+				}
+			},
+			{
+				"name": "final_status_log",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "SET_Gold_Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "ls_sql_db",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "\nUPDATE metadata.pipeline_run_log\nSET\n    bronze_status = '@{variables('v_bronze_status')}',\n    silver_status = '@{variables('v_silver_status')}',\n    gold_status = '@{variables('v_gold_status')}',\n\n    run_status =\n        CASE\n            WHEN '@{variables('v_bronze_status')}' = 'FAILED'\n              OR '@{variables('v_silver_status')}' = 'FAILED'\n              OR '@{variables('v_gold_status')}' = 'FAILED'\n            THEN 'FAILED'\n\n            WHEN '@{variables('v_bronze_status')}' = 'RUNNING'\n              OR '@{variables('v_silver_status')}' = 'RUNNING'\n              OR '@{variables('v_gold_status')}' = 'RUNNING'\n            THEN 'RUNNING'\n\n            ELSE 'SUCCESS'\n        END,\n\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\n\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT);\n",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
 				}
 			}
 		],
