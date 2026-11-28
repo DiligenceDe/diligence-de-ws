@@ -10,11 +10,11 @@
 				"typeProperties": {
 					"activities": [
 						{
-							"name": "copy_sql_to_landing_copy1",
+							"name": "copy_sql_to_landing",
 							"type": "Copy",
 							"dependsOn": [
 								{
-									"activity": "sql_start_landing_log_copy1",
+									"activity": "sql_start_landing_log",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -30,7 +30,11 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "AzureSqlSource",
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@concat('Select * from', '@{item().schema_name}','.','@{item().table_name}')",
+										"type": "Expression"
+									},
 									"queryTimeout": "02:00:00",
 									"partitionOption": "None"
 								},
@@ -56,11 +60,17 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "ds_sql_db",
+									"referenceName": "ds_onprem",
 									"type": "DatasetReference",
 									"parameters": {
-										"table_schema": "metadata",
-										"table_name": "object_config"
+										"schema_name": {
+											"value": "@item().schema_name",
+											"type": "Expression"
+										},
+										"table_name": {
+											"value": "@item().table_name",
+											"type": "Expression"
+										}
 									}
 								}
 							],
@@ -70,11 +80,11 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"file_name": {
-											"value": "SalesOrderHeader/batch_id=1001/",
+											"value": "@concat('@{item().table_name}','/','@{pipeline().parameters.p_batch_id}','/')",
 											"type": "Expression"
 										},
 										"directory": {
-											"value": "adventureworks/Sales",
+											"value": "@concat('@{item().database_name}','/','@{item().source_schema}','/')",
 											"type": "Expression"
 										},
 										"file_system": "landing"
@@ -83,7 +93,7 @@
 							]
 						},
 						{
-							"name": "sql_start_landing_log_copy1",
+							"name": "sql_start_landing_log",
 							"type": "Script",
 							"dependsOn": [],
 							"policy": {
@@ -112,11 +122,11 @@
 							}
 						},
 						{
-							"name": "SQL_Landing_Success_copy1",
+							"name": "SQL_Landing_Success",
 							"type": "Script",
 							"dependsOn": [
 								{
-									"activity": "copy_sql_to_landing_copy1",
+									"activity": "copy_sql_to_landing",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -148,11 +158,11 @@
 							}
 						},
 						{
-							"name": "SQL_Landing_Failure_copy1",
+							"name": "SQL_Landing_Failure",
 							"type": "Script",
 							"dependsOn": [
 								{
-									"activity": "copy_sql_to_landing_copy1",
+									"activity": "copy_sql_to_landing",
 									"dependencyConditions": [
 										"Failed"
 									]
