@@ -55,7 +55,7 @@
 					"isSequential": true,
 					"activities": [
 						{
-							"name": "IF_Silver_Enabled",
+							"name": "IF_Bronze_Enabled",
 							"type": "IfCondition",
 							"dependsOn": [],
 							"userProperties": [],
