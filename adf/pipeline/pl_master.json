@@ -577,202 +577,33 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "ForEach",
-							"type": "ForEach",
+							"name": "pl_landing",
+							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
-								"items": {
-									"value": "@activity('lookup_get_source_objects').output.value",
-									"type": "Expression"
+								"pipeline": {
+									"referenceName": "pl_landing",
+									"type": "PipelineReference"
 								},
-								"isSequential": true,
-								"activities": [
-									{
-										"name": "copy_sql_to_landing",
-										"type": "Copy",
-										"dependsOn": [
-											{
-												"activity": "sql_start_landing_log",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 2,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"typeProperties": {
-											"source": {
-												"type": "SqlServerSource",
-												"sqlReaderQuery": {
-													"value": "@concat('Select * from', '@{item().source_schema}','.','@{item().source_table}')",
-													"type": "Expression"
-												},
-												"queryTimeout": "02:00:00",
-												"partitionOption": "None"
-											},
-											"sink": {
-												"type": "ParquetSink",
-												"storeSettings": {
-													"type": "AzureBlobFSWriteSettings",
-													"copyBehavior": "FlattenHierarchy"
-												},
-												"formatSettings": {
-													"type": "ParquetWriteSettings"
-												}
-											},
-											"enableStaging": false,
-											"translator": {
-												"type": "TabularTranslator",
-												"typeConversion": true,
-												"typeConversionSettings": {
-													"allowDataTruncation": true,
-													"treatBooleanAsNumber": false
-												}
-											}
-										},
-										"inputs": [
-											{
-												"referenceName": "ds_onprem",
-												"type": "DatasetReference",
-												"parameters": {
-													"schema_name": {
-														"value": "@item().schema_name",
-														"type": "Expression"
-													},
-													"table_name": {
-														"value": "@item().table_name",
-														"type": "Expression"
-													}
-												}
-											}
-										],
-										"outputs": [
-											{
-												"referenceName": "ds_adls",
-												"type": "DatasetReference",
-												"parameters": {
-													"file_name": {
-														"value": "@concat('@{item().table_name}','/','@{pipeline().parameters.p_batch_id}','/')",
-														"type": "Expression"
-													},
-													"directory": {
-														"value": "@concat('@{item().database_name}','/','@{item().source_schema}','/')",
-														"type": "Expression"
-													},
-													"file_system": "landing"
-												}
-											}
-										]
+								"waitOnCompletion": true,
+								"parameters": {
+									"p_batch_id": {
+										"value": "@variables('v_batch_id')",
+										"type": "Expression"
 									},
-									{
-										"name": "sql_start_landing_log",
-										"type": "Script",
-										"dependsOn": [],
-										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"linkedServiceName": {
-											"referenceName": "ls_sql_db",
-											"type": "LinkedServiceReference"
-										},
-										"typeProperties": {
-											"scripts": [
-												{
-													"type": "Query",
-													"text": {
-														"value": "DECLARE @next_attempt INT;\n\nSELECT\n    @next_attempt = ISNULL(MAX(attempt_number), 0) + 1\nFROM metadata.table_run_log\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'LANDING';\n\nINSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'LANDING',\n    @next_attempt,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
-														"type": "Expression"
-													}
-												}
-											],
-											"scriptBlockExecutionTimeout": "02:00:00"
-										}
+									"P_source_id": {
+										"value": "@pipeline().parameters.p_source_id",
+										"type": "Expression"
 									},
-									{
-										"name": "SQL_Landing_Success",
-										"type": "Script",
-										"dependsOn": [
-											{
-												"activity": "copy_sql_to_landing",
-												"dependencyConditions": [
-													"Succeeded"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"linkedServiceName": {
-											"referenceName": "ls_sql_db",
-											"type": "LinkedServiceReference"
-										},
-										"typeProperties": {
-											"scripts": [
-												{
-													"type": "Query",
-													"text": {
-														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL,\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'LANDING'\n  AND run_status = 'RUNNING';\n",
-														"type": "Expression"
-													}
-												}
-											],
-											"scriptBlockExecutionTimeout": "02:00:00"
-										}
-									},
-									{
-										"name": "SQL_Landing_Failure",
-										"type": "Script",
-										"dependsOn": [
-											{
-												"activity": "copy_sql_to_landing",
-												"dependencyConditions": [
-													"Failed"
-												]
-											}
-										],
-										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
-											"secureOutput": false,
-											"secureInput": false
-										},
-										"userProperties": [],
-										"linkedServiceName": {
-											"referenceName": "ls_sql_db",
-											"type": "LinkedServiceReference"
-										},
-										"typeProperties": {
-											"scripts": [
-												{
-													"type": "Query",
-													"text": {
-														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing Copy Activity failed. Check ADF activity output.',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'LANDING'\n  AND run_status = 'RUNNING';\n",
-														"type": "Expression"
-													}
-												}
-											],
-											"scriptBlockExecutionTimeout": "02:00:00"
-										}
+									"P_run_mode": {
+										"value": "@pipeline().parameters.p_run_mode",
+										"type": "Expression"
 									}
-								]
+								}
 							}
 						}
 					]
