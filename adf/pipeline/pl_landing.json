@@ -31,7 +31,6 @@
 							"typeProperties": {
 								"source": {
 									"type": "AzureSqlSource",
-									"sqlReaderQuery": "Select 1 as test_id",
 									"queryTimeout": "02:00:00",
 									"partitionOption": "None"
 								},
@@ -60,14 +59,8 @@
 									"referenceName": "ds_sql_db",
 									"type": "DatasetReference",
 									"parameters": {
-										"table_schema": {
-											"value": "@{item().schema_name}",
-											"type": "Expression"
-										},
-										"table_name": {
-											"value": "@{item().table_name}",
-											"type": "Expression"
-										}
+										"table_schema": "metadata",
+										"table_name": "object_config"
 									}
 								}
 							],
