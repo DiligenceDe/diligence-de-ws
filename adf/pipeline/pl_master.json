@@ -129,11 +129,11 @@
 								},
 								"ifTrueActivities": [
 									{
-										"name": "copy_sql_to_bronze",
+										"name": "copy_sql_to_landing",
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "sql_start_bronze_log",
+												"activity": "sql_start_landing_log",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -197,7 +197,7 @@
 										]
 									},
 									{
-										"name": "sql_start_bronze_log",
+										"name": "sql_start_landing_log",
 										"type": "Script",
 										"dependsOn": [],
 										"policy": {
@@ -217,7 +217,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "DECLARE @next_attempt INT;\n\nSELECT\n    @next_attempt = ISNULL(MAX(attempt_number), 0) + 1\nFROM metadata.table_run_log\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE';\n\nINSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'BRONZE',\n    @next_attempt,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+														"value": "DECLARE @next_attempt INT;\n\nSELECT\n    @next_attempt = ISNULL(MAX(attempt_number), 0) + 1\nFROM metadata.table_run_log\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'LANDING';\n\nINSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'LANDING',\n    @next_attempt,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
 														"type": "Expression"
 													}
 												}
@@ -226,11 +226,11 @@
 										}
 									},
 									{
-										"name": "SQL_Bronze_Success",
+										"name": "SQL_Landing_Success",
 										"type": "Script",
 										"dependsOn": [
 											{
-												"activity": "copy_sql_to_bronze",
+												"activity": "copy_sql_to_landing",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -253,7 +253,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL,\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';\n",
+														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL,\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'LANDING'\n  AND run_status = 'RUNNING';\n",
 														"type": "Expression"
 													}
 												}
@@ -262,11 +262,11 @@
 										}
 									},
 									{
-										"name": "SQL_Bronze_Failure",
+										"name": "SQL_Landing_Failure",
 										"type": "Script",
 										"dependsOn": [
 											{
-												"activity": "copy_sql_to_bronze",
+												"activity": "copy_sql_to_landing",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -289,7 +289,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze Copy Activity failed. Check ADF activity output.',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';\n",
+														"value": "\nUPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing Copy Activity failed. Check ADF activity output.',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id =\n    CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'LANDING'\n  AND run_status = 'RUNNING';\n",
 														"type": "Expression"
 													}
 												}
