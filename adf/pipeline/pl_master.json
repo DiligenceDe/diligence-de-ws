@@ -385,7 +385,7 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "pl_silver",
+							"name": "pl_bronze",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"policy": {
@@ -394,7 +394,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "pl_silver",
+									"referenceName": "pl_bronze",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
@@ -473,7 +473,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "IF_Bronze_Success_copy1",
+						"activity": "IF_Bronze_Success",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -632,11 +632,11 @@
 				}
 			},
 			{
-				"name": "IF_Bronze_Success_copy1",
+				"name": "IF_Bronze_Success",
 				"type": "IfCondition",
 				"dependsOn": [
 					{
-						"activity": "SET_Silver_Status_copy1",
+						"activity": "SET_Bronze_Status_copy1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -683,7 +683,7 @@
 				}
 			},
 			{
-				"name": "LKP_Check_Silver_Status_copy1",
+				"name": "LKP_Check_Bronze_Status",
 				"type": "Lookup",
 				"dependsOn": [
 					{
@@ -722,11 +722,11 @@
 				}
 			},
 			{
-				"name": "SET_Silver_Status_copy1",
+				"name": "SET_Bronze_Status_copy1",
 				"type": "SetVariable",
 				"dependsOn": [
 					{
-						"activity": "LKP_Check_Silver_Status_copy1",
+						"activity": "LKP_Check_Bronze_Status",
 						"dependencyConditions": [
 							"Succeeded"
 						]
