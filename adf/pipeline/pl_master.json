@@ -124,7 +124,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"expression": {
-									"value": "@equals(item().bronze_enabled, true)",
+									"value": "@equals(item().landing_enabled, true)",
 									"type": "Expression"
 								},
 								"ifTrueActivities": [
@@ -179,8 +179,14 @@
 												"referenceName": "ds_sql_db",
 												"type": "DatasetReference",
 												"parameters": {
-													"table_schema": "metadata",
-													"table_name": "object_config"
+													"table_schema": {
+														"value": "@{item().schema_name}",
+														"type": "Expression"
+													},
+													"table_name": {
+														"value": "@{item().table_name}",
+														"type": "Expression"
+													}
 												}
 											}
 										],
@@ -189,9 +195,15 @@
 												"referenceName": "ds_adls",
 												"type": "DatasetReference",
 												"parameters": {
-													"file_name": "test",
-													"directory": "test",
-													"file_system": "test"
+													"file_name": {
+														"value": "SalesOrderHeader/batch_id=1001/",
+														"type": "Expression"
+													},
+													"directory": {
+														"value": "adventureworks/Sales",
+														"type": "Expression"
+													},
+													"file_system": "landing"
 												}
 											}
 										]
@@ -326,7 +338,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.bronze_enabled = 1\n),\nLatestAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'LANDING'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestAttempt la\n                ON la.object_id = e.object_id\n               AND la.rn = 1\n            WHERE la.object_id IS NULL\n               OR la.run_status <> 'SUCCESS'\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS landing_status;\n",
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.landing_enabled = 1\n),\nLatestAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'LANDING'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestAttempt la\n                ON la.object_id = e.object_id\n               AND la.rn = 1\n            WHERE la.object_id IS NULL\n               OR la.run_status <> 'SUCCESS'\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS landing_status;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
