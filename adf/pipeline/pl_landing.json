@@ -205,6 +205,11 @@
 				"type": "string"
 			}
 		},
+		"variables": {
+			"v_landing": {
+				"type": "String"
+			}
+		},
 		"annotations": []
 	}
 }
