@@ -194,6 +194,17 @@
 				}
 			}
 		],
+		"parameters": {
+			"p_batch_id": {
+				"type": "string"
+			},
+			"P_source_id": {
+				"type": "string"
+			},
+			"P_run_mode": {
+				"type": "string"
+			}
+		},
 		"annotations": []
 	}
 }
