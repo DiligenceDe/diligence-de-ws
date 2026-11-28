@@ -62,7 +62,7 @@
 							"typeProperties": {
 								"ifTrueActivities": [
 									{
-										"name": "SQL_Start_Silver_Log",
+										"name": "SQL_Start_Bronze_Log",
 										"type": "Script",
 										"dependsOn": [],
 										"policy": {
@@ -82,7 +82,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'SILVER',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+														"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'BRONZE',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
 														"type": "Expression"
 													}
 												}
@@ -91,11 +91,11 @@
 										}
 									},
 									{
-										"name": "NB_Silver_Generic",
+										"name": "NB_Bronze_Generic",
 										"type": "DatabricksNotebook",
 										"dependsOn": [
 											{
-												"activity": "SQL_Start_Silver_Log",
+												"activity": "SQL_Start_Bronze_Log",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -111,7 +111,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"notebookPath": {
-												"value": "/Shared/AdventureWorks/NB_Silver_Generic",
+												"value": "/Shared/AdventureWorks/NB_Bronze_Generic",
 												"type": "Expression"
 											},
 											"baseParameters": {
@@ -138,11 +138,11 @@
 										}
 									},
 									{
-										"name": "SQL_Silver_Success",
+										"name": "SQL_Bronze_Success",
 										"type": "Lookup",
 										"dependsOn": [
 											{
-												"activity": "NB_Silver_Generic",
+												"activity": "NB_Bronze_Generic",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -160,7 +160,7 @@
 											"source": {
 												"type": "AzureSqlSource",
 												"sqlReaderQuery": {
-													"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'SILVER'\n  AND run_status = 'RUNNING';",
+													"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",
@@ -178,11 +178,11 @@
 										}
 									},
 									{
-										"name": "SQL_Silver_Failure",
+										"name": "SQL_Bronze_Failure",
 										"type": "Lookup",
 										"dependsOn": [
 											{
-												"activity": "NB_Silver_Generic",
+												"activity": "NB_Bronze_Generic",
 												"dependencyConditions": [
 													"Failed"
 												]
@@ -200,7 +200,7 @@
 											"source": {
 												"type": "AzureSqlSource",
 												"sqlReaderQuery": {
-													"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Silver notebook execution failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'SILVER'\n  AND run_status = 'RUNNING';",
+													"value": "UPDATE metadata.table_run_log\nSET\n    run_status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze notebook execution failed',\n    modified_date = SYSUTCDATETIME()\nWHERE batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n  AND object_id = @{item().object_id}\n  AND layer_name = 'BRONZE'\n  AND run_status = 'RUNNING';",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",
