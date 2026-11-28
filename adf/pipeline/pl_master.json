@@ -585,7 +585,7 @@
 			},
 			"p_rerun_layer": {
 				"type": "string",
-				"defaultValue": "BRONZE"
+				"defaultValue": "LANDING"
 			}
 		},
 		"variables": {
