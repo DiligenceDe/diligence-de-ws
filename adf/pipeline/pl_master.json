@@ -63,7 +63,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "If Condition Landing",
+						"activity": "if_objects_exists_landing",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -559,7 +559,7 @@
 				}
 			},
 			{
-				"name": "If Condition Landing",
+				"name": "if_objects_exists_landing",
 				"type": "IfCondition",
 				"dependsOn": [
 					{
