@@ -70,8 +70,8 @@
 					}
 				],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
+					"timeout": "00.02:00:00",
+					"retry": 2,
 					"retryIntervalInSeconds": 30,
 					"secureOutput": false,
 					"secureInput": false
@@ -81,7 +81,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "\nWITH LatestBronzeAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'BRONZE'\n)\nSELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\nFROM metadata.source_config sc\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\nLEFT JOIN LatestBronzeAttempt la\n    ON la.object_id = oc.object_id\n   AND la.rn = 1\nWHERE sc.source_id = @{pipeline().parameters.p_source_id}\n  AND sc.is_active = 1\n  AND oc.is_active = 1\n  AND oc.bronze_enabled = 1\n  AND\n  (\n      '@{pipeline().parameters.p_run_mode}' = 'INITIAL'\n      OR\n      (\n          '@{pipeline().parameters.p_run_mode}' = 'RERUN'\n          AND ISNULL(la.run_status, 'NOT_STARTED') <> 'SUCCESS'\n      )\n  )\nORDER BY oc.execution_order;\n",
+							"value": "SELECT\n    sc.source_id,\n    sc.source_name,\n    sc.server_name,\n    sc.database_name,\n    sc.authentication_type,\n\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.load_type,\n    oc.primary_key_columns,\n    oc.watermark_column,\n\n    oc.landing_enabled,\n    oc.bronze_enabled,\n    oc.silver_enabled,\n    oc.gold_enabled,\n    oc.execution_order\n\nFROM metadata.source_config sc\n\nINNER JOIN metadata.object_config oc\n    ON sc.source_id = oc.source_id\n\nWHERE\n    sc.source_id = @{pipeline().parameters.p_source_id}\n    AND sc.is_active = 1\n    AND oc.is_active = 1\n    AND oc.landing_enabled = 1\n\nORDER BY\n    oc.execution_order,\n    oc.object_id;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
