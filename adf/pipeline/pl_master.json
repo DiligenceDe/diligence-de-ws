@@ -636,7 +636,7 @@
 				"type": "IfCondition",
 				"dependsOn": [
 					{
-						"activity": "SET_Bronze_Status_copy1",
+						"activity": "SET_Bronze_Status",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -650,7 +650,7 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "pl_silver_copy1",
+							"name": "pl_silver",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"policy": {
@@ -705,7 +705,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.silver_enabled = 1\n      AND EXISTS\n      (\n          SELECT 1\n          FROM metadata.table_run_log br\n          WHERE br.batch_id =\n                CAST('@{variables('v_batch_id')}' AS BIGINT)\n            AND br.object_id = oc.object_id\n            AND br.layer_name = 'BRONZE'\n            AND br.run_status = 'SUCCESS'\n            AND br.attempt_number =\n            (\n                SELECT MAX(br2.attempt_number)\n                FROM metadata.table_run_log br2\n                WHERE br2.batch_id = br.batch_id\n                  AND br2.object_id = br.object_id\n                  AND br2.layer_name = 'BRONZE'\n            )\n      )\n),\nLatestSilverAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'SILVER'\n)\nSELECT\n    CASE\n        WHEN '@{variables('v_bronze_status')}' <> 'SUCCESS'\n            THEN 'FAILED'\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestSilverAttempt sa\n                ON sa.object_id = e.object_id\n               AND sa.rn = 1\n            WHERE sa.object_id IS NULL\n               OR sa.run_status <> 'SUCCESS'\n        )\n            THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS silver_status;\n",
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.bronze_enabled = 1\n      AND EXISTS\n      (\n          SELECT 1\n          FROM metadata.table_run_log br\n          WHERE br.batch_id =\n                CAST('@{variables('v_batch_id')}' AS BIGINT)\n            AND br.object_id = oc.object_id\n            AND br.layer_name = 'BRONZE'\n            AND br.run_status = 'SUCCESS'\n            AND br.attempt_number =\n            (\n                SELECT MAX(br2.attempt_number)\n                FROM metadata.table_run_log br2\n                WHERE br2.batch_id = br.batch_id\n                  AND br2.object_id = br.object_id\n                  AND br2.layer_name = 'BRONZE'\n            )\n      )\n),\nLatestbronzeAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'BRONZE'\n)\nSELECT\n    CASE\n        WHEN '@{variables('v_bronze_status')}' <> 'SUCCESS'\n            THEN 'FAILED'\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestSilverAttempt sa\n                ON sa.object_id = e.object_id\n               AND sa.rn = 1\n            WHERE sa.object_id IS NULL\n               OR sa.run_status <> 'SUCCESS'\n        )\n            THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS bronze_status;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -722,7 +722,7 @@
 				}
 			},
 			{
-				"name": "SET_Bronze_Status_copy1",
+				"name": "SET_Bronze_Status",
 				"type": "SetVariable",
 				"dependsOn": [
 					{
@@ -738,9 +738,9 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"variableName": "v_silver_status",
+					"variableName": "v_bronze_status",
 					"value": {
-						"value": "@activity('LKP_Check_Silver_Status').output.firstRow.silver_status",
+						"value": "@activity('LKP_Check_Bronze_Status').output.firstRow.bronze_status",
 						"type": "Expression"
 					}
 				}
