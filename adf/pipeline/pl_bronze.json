@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "LKP_Get_Silver_Objects",
+				"name": "LKP_Get_Bronze_Objects",
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
@@ -18,7 +18,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "WITH LatestBronze AS\n(\n    SELECT\n        batch_id,\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY batch_id, object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n      AND layer_name = 'BRONZE'\n),\nLatestSilver AS\n(\n    SELECT\n        batch_id,\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY batch_id, object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n      AND layer_name = 'SILVER'\n)\nSELECT\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.execution_order\nFROM metadata.object_config oc\nINNER JOIN LatestBronze b\n    ON oc.object_id = b.object_id\n   AND b.rn = 1\n   AND b.run_status = 'SUCCESS'\nLEFT JOIN LatestSilver s\n    ON oc.object_id = s.object_id\n   AND s.rn = 1\nWHERE oc.is_active = 1\n  AND oc.silver_enabled = 1\n  AND s.object_id IS NULL\nORDER BY oc.execution_order;",
+							"value": "WITH LatestLanding AS\n(\n    SELECT\n        batch_id,\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY batch_id, object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n      AND layer_name = 'LANDING'\n),\nLatestSilver AS\n(\n    SELECT\n        batch_id,\n        object_id,\n        run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY batch_id, object_id\n            ORDER BY attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log\n    WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n      AND layer_name = 'BRONZE'\n)\nSELECT\n    oc.object_id,\n    oc.source_schema,\n    oc.source_table,\n    oc.target_table,\n    oc.execution_order\nFROM metadata.object_config oc\nINNER JOIN LatestLanding b\n    ON oc.object_id = b.object_id\n   AND b.rn = 1\n   AND b.run_status = 'SUCCESS'\nLEFT JOIN LatestSilver s\n    ON oc.object_id = s.object_id\n   AND s.rn = 1\nWHERE oc.is_active = 1\n  AND oc.silver_enabled = 1\n  AND s.object_id IS NULL\nORDER BY oc.execution_order;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -40,7 +40,7 @@
 				"type": "ForEach",
 				"dependsOn": [
 					{
-						"activity": "LKP_Get_Silver_Objects",
+						"activity": "LKP_Get_Bronze_Objects",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -49,7 +49,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('LKP_Get_Silver_Objects').output.value",
+						"value": "@activity('LKP_Get_Bronze_Objects').output.value",
 						"type": "Expression"
 					},
 					"isSequential": true,
@@ -224,7 +224,7 @@
 				}
 			},
 			{
-				"name": "LKP_Check_Silver_Status",
+				"name": "LKP_Check_BronzeStatus",
 				"type": "Lookup",
 				"dependsOn": [
 					{
@@ -246,7 +246,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n              AND layer_name = 'SILVER'\n              AND run_status = 'FAILED'\n        )\n        THEN 'FAILED'\n\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n              AND layer_name = 'SILVER'\n              AND run_status = 'RUNNING'\n        )\n        THEN 'RUNNING'\n\n        ELSE 'SUCCESS'\n    END AS silver_status;",
+							"value": "SELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n              AND layer_name = 'BRONZE'\n              AND run_status = 'FAILED'\n        )\n        THEN 'FAILED'\n\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM metadata.table_run_log\n            WHERE batch_id = CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT)\n              AND layer_name = 'SILVER'\n              AND run_status = 'RUNNING'\n        )\n        THEN 'RUNNING'\n\n        ELSE 'SUCCESS'\n    END AS silver_status;",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -268,7 +268,7 @@
 				"type": "SetVariable",
 				"dependsOn": [
 					{
-						"activity": "LKP_Check_Silver_Status",
+						"activity": "LKP_Check_BronzeStatus",
 						"dependencyConditions": [
 							"Succeeded"
 						]
