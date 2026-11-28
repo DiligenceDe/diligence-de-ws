@@ -99,7 +99,7 @@
 				}
 			},
 			{
-				"name": "foreach_bronze_objects",
+				"name": "foreach_source_objects",
 				"type": "ForEach",
 				"dependsOn": [
 					{
@@ -304,11 +304,11 @@
 				}
 			},
 			{
-				"name": "LKP_Check_Bronze_Status",
+				"name": "LKP_Check_Landing_Status",
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "foreach_bronze_objects",
+						"activity": "foreach_source_objects",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -326,7 +326,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.bronze_enabled = 1\n),\nLatestAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'BRONZE'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestAttempt la\n                ON la.object_id = e.object_id\n               AND la.rn = 1\n            WHERE la.object_id IS NULL\n               OR la.run_status <> 'SUCCESS'\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS bronze_status;\n",
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.bronze_enabled = 1\n),\nLatestAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id = CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'LANDING'\n)\nSELECT\n    CASE\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestAttempt la\n                ON la.object_id = e.object_id\n               AND la.rn = 1\n            WHERE la.object_id IS NULL\n               OR la.run_status <> 'SUCCESS'\n        )\n        THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS landing_status;\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -343,11 +343,11 @@
 				}
 			},
 			{
-				"name": "SET_Bronze_Status",
+				"name": "SET_Landing_Status",
 				"type": "SetVariable",
 				"dependsOn": [
 					{
-						"activity": "LKP_Check_Bronze_Status",
+						"activity": "LKP_Check_Landing_Status",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -359,19 +359,19 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"variableName": "v_bronze_status",
+					"variableName": "v_landing_status",
 					"value": {
-						"value": "@activity('LKP_Check_Bronze_Status').output.firstRow.bronze_status",
+						"value": "@activity('LKP_Check_Landing_Status').output.firstRow.landing_status",
 						"type": "Expression"
 					}
 				}
 			},
 			{
-				"name": "IF_Bronze_Success",
+				"name": "IF_Landing_Success",
 				"type": "IfCondition",
 				"dependsOn": [
 					{
-						"activity": "SET_Bronze_Status",
+						"activity": "SET_Landing_Status",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -473,7 +473,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "IF_Bronze_Success",
+						"activity": "IF_Bronze_Success_copy1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -630,6 +630,120 @@
 					],
 					"scriptBlockExecutionTimeout": "02:00:00"
 				}
+			},
+			{
+				"name": "IF_Bronze_Success_copy1",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "SET_Silver_Status_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('v_bronze_status'), 'SUCCESS')",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "pl_silver_copy1",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "pl_silver",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"p_batch_id": {
+										"value": "@variables('v_batch_id')",
+										"type": "Expression"
+									},
+									"p_source_id": {
+										"value": "@pipeline().parameters.p_source_id",
+										"type": "Expression"
+									},
+									"p_run_mode": {
+										"value": "@pipeline().parameters.p_run_mode",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "LKP_Check_Silver_Status_copy1",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "IF_Landing_Success",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "\nWITH ExpectedObjects AS\n(\n    SELECT\n        oc.object_id\n    FROM metadata.object_config oc\n    INNER JOIN metadata.source_config sc\n        ON sc.source_id = oc.source_id\n    WHERE sc.source_id = @{pipeline().parameters.p_source_id}\n      AND sc.is_active = 1\n      AND oc.is_active = 1\n      AND oc.silver_enabled = 1\n      AND EXISTS\n      (\n          SELECT 1\n          FROM metadata.table_run_log br\n          WHERE br.batch_id =\n                CAST('@{variables('v_batch_id')}' AS BIGINT)\n            AND br.object_id = oc.object_id\n            AND br.layer_name = 'BRONZE'\n            AND br.run_status = 'SUCCESS'\n            AND br.attempt_number =\n            (\n                SELECT MAX(br2.attempt_number)\n                FROM metadata.table_run_log br2\n                WHERE br2.batch_id = br.batch_id\n                  AND br2.object_id = br.object_id\n                  AND br2.layer_name = 'BRONZE'\n            )\n      )\n),\nLatestSilverAttempt AS\n(\n    SELECT\n        tr.object_id,\n        tr.run_status,\n        ROW_NUMBER() OVER\n        (\n            PARTITION BY tr.object_id\n            ORDER BY tr.attempt_number DESC\n        ) AS rn\n    FROM metadata.table_run_log tr\n    WHERE tr.batch_id =\n        CAST('@{variables('v_batch_id')}' AS BIGINT)\n      AND tr.layer_name = 'SILVER'\n)\nSELECT\n    CASE\n        WHEN '@{variables('v_bronze_status')}' <> 'SUCCESS'\n            THEN 'FAILED'\n        WHEN EXISTS\n        (\n            SELECT 1\n            FROM ExpectedObjects e\n            LEFT JOIN LatestSilverAttempt sa\n                ON sa.object_id = e.object_id\n               AND sa.rn = 1\n            WHERE sa.object_id IS NULL\n               OR sa.run_status <> 'SUCCESS'\n        )\n            THEN 'FAILED'\n        ELSE 'SUCCESS'\n    END AS silver_status;\n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ds_sql_db",
+						"type": "DatasetReference",
+						"parameters": {
+							"table_schema": "metadata",
+							"table_name": "object_config"
+						}
+					}
+				}
+			},
+			{
+				"name": "SET_Silver_Status_copy1",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "LKP_Check_Silver_Status_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_silver_status",
+					"value": {
+						"value": "@activity('LKP_Check_Silver_Status').output.firstRow.silver_status",
+						"type": "Expression"
+					}
+				}
 			}
 		],
 		"parameters": {
@@ -662,6 +776,9 @@
 				"type": "String"
 			},
 			"v_gold_status": {
+				"type": "String"
+			},
+			"v_landing_status": {
 				"type": "String"
 			}
 		},
