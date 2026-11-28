@@ -604,6 +604,24 @@
 							"Succeeded",
 							"Failed"
 						]
+					},
+					{
+						"activity": "SET_Silver_Status",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "SET_Bronze_Status",
+						"dependencyConditions": [
+							"Failed"
+						]
+					},
+					{
+						"activity": "SET_Landing_Status",
+						"dependencyConditions": [
+							"Failed"
+						]
 					}
 				],
 				"policy": {
