@@ -135,7 +135,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"expression": {
-						"value": "@equals(variables('v_bronze_status'), 'SUCCESS')",
+						"value": "@equals(variables('v_landing_status'), 'SUCCESS')",
 						"type": "Expression"
 					},
 					"ifTrueActivities": [
