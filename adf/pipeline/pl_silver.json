@@ -82,7 +82,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{variables('v_batch_id')}' AS BIGINT),\n    @{item().object_id},\n    'SILVER',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+														"value": "INSERT INTO metadata.table_run_log\n(\n    batch_id,\n    object_id,\n    layer_name,\n    attempt_number,\n    run_status,\n    start_time,\n    created_date,\n    modified_date\n)\nVALUES\n(\n    CAST('@{pipeline().parameters.p_batch_id}' AS BIGINT),\n    @{item().object_id},\n    'SILVER',\n    1,\n    'RUNNING',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
 														"type": "Expression"
 													}
 												}
@@ -115,13 +115,34 @@
 												"type": "Expression"
 											},
 											"baseParameters": {
-												"p_batch_id": "@variables('v_batch_id')",
-												"p_object_id": "@string(item().object_id)",
-												"p_source_schema": "@item().source_schema",
-												"p_source_table": "@item().source_table",
-												"p_target_table": "@item().target_table",
-												"p_primary_key_columns": "@item().primary_key_columns",
-												"p_load_type": "@item().load_type",
+												"p_batch_id": {
+													"value": "@variables('v_batch_id')",
+													"type": "Expression"
+												},
+												"p_object_id": {
+													"value": "@string(item().object_id)",
+													"type": "Expression"
+												},
+												"p_source_schema": {
+													"value": "@item().source_schema",
+													"type": "Expression"
+												},
+												"p_source_table": {
+													"value": "@item().source_table",
+													"type": "Expression"
+												},
+												"p_target_table": {
+													"value": "@item().target_table",
+													"type": "Expression"
+												},
+												"p_primary_key_columns": {
+													"value": "@item().primary_key_columns",
+													"type": "Expression"
+												},
+												"p_load_type": {
+													"value": "@item().load_type",
+													"type": "Expression"
+												},
 												"p_bronze_path": {
 													"value": "@concat(\n    'abfss://<container>@<storage-account>.dfs.core.windows.net/bronze/',\n    item().source_schema,\n    '/',\n    item().target_table,\n    '/batch_id=',\n    variables('v_batch_id')\n)",
 													"type": "Expression"
